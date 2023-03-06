@@ -1,0 +1,58 @@
+networks:
+  backend:
+    driver: bridge
+
+services:
+  app:
+    build:
+      context: '.'
+      dockerfile: 'Dockerfile.dev'
+    env_file:
+      - ".env"
+    volumes:
+      - .:/app
+    ports:
+      - 8080:80
+    depends_on:
+      - postgres
+    networks:
+      - backend
+
+  postgres:
+    image: 'postgres:12-alpine'
+    expose:
+      - 5432
+    ports:
+      - 5432:5432
+    networks:
+      - backend
+    env_file:
+      - ".env"
+
+  migrate:
+    image: migrate/migrate:latest
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      - postgres
+    networks:
+      - backend
+    env_file:
+      - ".env"
+    command: [ "-path", "/migrations", "-database", "${DB_DSN}?sslmode=disable", "up" ]
+    deploy:
+      replicas: 0
+
+  rollback:
+    image: migrate/migrate:latest
+    volumes:
+      - ./migrations:/migrations
+    depends_on:
+      - postgres
+    networks:
+      - backend
+    env_file:
+      - ".env"
+    command: [ "-path", "/migrations", "-database", "${DB_DSN}?sslmode=disable", "down", "1" ]
+    deploy:
+      replicas: 0
