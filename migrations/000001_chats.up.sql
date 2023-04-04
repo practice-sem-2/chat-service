@@ -18,10 +18,12 @@ CREATE TABLE chat_members
 
 CREATE TABLE messages
 (
-    message_id uuid          NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
-    chat_id    uuid          NOT NULL REFERENCES chats,
-    reply_to   uuid          NULL     DEFAULT NULL REFERENCES messages,
-    text       VARCHAR(2048) NULL     DEFAULT NULL
+    message_id   uuid          NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
+    chat_id      uuid          NOT NULL REFERENCES chats,
+    from_user    varchar(64)   NOT NULL,
+    reply_to     uuid          NULL     DEFAULT NULL REFERENCES messages,
+    sending_time TIMESTAMP     NOT NULL DEFAULT (now() at time zone 'utc'),
+    text         VARCHAR(2048) NULL     DEFAULT NULL
 );
 
 CREATE TABLE attachments
