@@ -32,7 +32,7 @@ func (s *ChatsStorageTestSuite) Test_CreateChat() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 
 	// Check if chat was actually created
@@ -49,10 +49,10 @@ func (s *ChatsStorageTestSuite) Test_Create_CorrectErrorIfChatExists() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 
-	assert.ErrorIs(s.T(), store.CreateChat(ctx, chatId), ErrChatAlreadyExists)
+	assert.ErrorIs(s.T(), store.CreateChat(ctx, chatId, false), ErrChatAlreadyExists)
 
 }
 
@@ -62,7 +62,7 @@ func (s *ChatsStorageTestSuite) Test_AddMember() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 
 	members := []string{
@@ -97,7 +97,7 @@ func (s *ChatsStorageTestSuite) Test_AddMember_Atomic() {
 
 	err := registry.Atomic(ctx, func(registry *Registry) error {
 		store := registry.GetChatsStore()
-		err := store.CreateChat(ctx, chatId)
+		err := store.CreateChat(ctx, chatId, false)
 		assert.NoError(s.T(), err, "should correctly create chat")
 
 		err = store.AddChatMembers(ctx, chatId, []string{"74cccd17-9c56-490b-b721-88c027976863"})
@@ -121,7 +121,7 @@ func (s *ChatsStorageTestSuite) Test_DeleteMember() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 
 	members := []string{
@@ -146,6 +146,31 @@ func (s *ChatsStorageTestSuite) Test_DeleteMember() {
 	assert.Equal(s.T(), 0, count, "member should be correctly deleted from chat")
 }
 
+func (s *ChatsStorageTestSuite) Test_GetChat() {
+	const chatId = "694a909e-bec7-4dbe-bf38-935a99d848cc"
+	members := []string{
+		"74cccd17-9c56-490b-b721-88c027976863",
+		"67f85047-09d0-42a2-a5ee-9ce8db28cb07",
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	store := NewChatsStorage(s.db)
+	err := store.CreateChat(ctx, chatId, false)
+	assert.NoError(s.T(), err, "should correctly create chat")
+
+	err = store.AddChatMembers(ctx, chatId, members)
+	assert.NoError(s.T(), err, "should correctly add members chat")
+
+	chat, err := store.GetChat(ctx, chatId)
+
+	assert.NoError(s.T(), err, "chat should be returned without errors")
+	assert.Equal(s.T(), chat.ChatID, chatId)
+	assert.Equal(s.T(), chat.IsDirect, false)
+	assert.Equal(s.T(), chat.MembersCount, 2)
+}
+
 func (s *ChatsStorageTestSuite) Test_GetChatWithMembers() {
 	const chatId = "694a909e-bec7-4dbe-bf38-935a99d848cc"
 	members := []string{
@@ -157,7 +182,7 @@ func (s *ChatsStorageTestSuite) Test_GetChatWithMembers() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 
 	err = store.AddChatMembers(ctx, chatId, members)
@@ -166,6 +191,8 @@ func (s *ChatsStorageTestSuite) Test_GetChatWithMembers() {
 	chat, err := store.GetChatWithMembers(ctx, chatId)
 	assert.NoError(s.T(), err, "should correctly return chat with members")
 	assert.Equal(s.T(), chatId, chat.ChatID)
+	assert.Equal(s.T(), false, chat.IsDirect)
+	assert.Equal(s.T(), 2, chat.MembersCount)
 
 	expectedMembers := []models.ChatMember{
 		{UserID: "67f85047-09d0-42a2-a5ee-9ce8db28cb07"},
@@ -194,7 +221,7 @@ func (s *ChatsStorageTestSuite) Test_UserIsMember() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 	err = store.AddChatMembers(ctx, chatId, []string{userId})
 	assert.NoError(s.T(), err, "should correctly add members")
@@ -229,7 +256,7 @@ func (s *ChatsStorageTestSuite) Test_PutMessage() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 	err = store.AddChatMembers(ctx, chatId, []string{userId})
 	assert.NoError(s.T(), err, "should correctly add member to chat")
@@ -262,7 +289,7 @@ func (s *ChatsStorageTestSuite) Test_DeleteMessage() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 	err = store.AddChatMembers(ctx, chatId, []string{userId})
 	assert.NoError(s.T(), err, "should correctly add member to chat")
@@ -307,7 +334,7 @@ func (s *ChatsStorageTestSuite) Test_SelectMessage() {
 	defer cancel()
 
 	store := NewChatsStorage(s.db)
-	err := store.CreateChat(ctx, chatId)
+	err := store.CreateChat(ctx, chatId, false)
 	assert.NoError(s.T(), err, "should correctly create chat")
 	err = store.AddChatMembers(ctx, chatId, []string{userId})
 	assert.NoError(s.T(), err, "should correctly add member to chat")

@@ -4,8 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	_ "github.com/jackc/pgx/stdlib"
+	"github.com/go-playground/validator/v10"
 	"github.com/jmoiron/sqlx"
+	"github.com/practice-sem-2/auth-tools"
 	"github.com/practice-sem-2/user-service/internal/pb"
 	"github.com/practice-sem-2/user-service/internal/server"
 	storage "github.com/practice-sem-2/user-service/internal/storages"
@@ -58,7 +59,7 @@ func initDB(dsn string, logger *logrus.Logger) *sqlx.DB {
 	return db
 }
 
-func initServer(address string, useCases *usecase.ChatsUsecase, logger *logrus.Logger) (*grpc.Server, net.Listener) {
+func initServer(address string, c *usecase.ChatsUsecase, a *auth.VerifierService, v *validator.Validate, logger *logrus.Logger) (*grpc.Server, net.Listener) {
 
 	listener, err := net.Listen("tcp", address)
 	logger.Infof("start listening on %s", address)
@@ -68,7 +69,7 @@ func initServer(address string, useCases *usecase.ChatsUsecase, logger *logrus.L
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterChatServer(grpcServer, server.NewChatServer(useCases))
+	pb.RegisterChatServer(grpcServer, server.NewChatServer(c, a, v))
 
 	return grpcServer, listener
 }
@@ -99,10 +100,16 @@ func main() {
 	}(db)
 
 	store := storage.NewRegistry(db)
-	useCases := usecase.NewChatsUsecase(store)
+	chats := usecase.NewChatsUsecase(store)
+	verifier, err := auth.NewVerifierFromFile(viper.GetString("JWT_PUBLIC_KEY_PATH"))
 
+	if err != nil {
+		logger.Fatalf("verifier can't read public key: %s", err.Error())
+	}
+
+	validate := validator.New()
 	address := fmt.Sprintf("%s:%d", host, port)
-	srv, lis := initServer(address, useCases, logger)
+	srv, lis := initServer(address, chats, verifier, validate, logger)
 	osSignal := make(chan os.Signal, 1)
 	signal.Notify(osSignal,
 		syscall.SIGHUP,
@@ -120,7 +127,7 @@ func main() {
 		}
 	}(ctx)
 
-	err := srv.Serve(lis)
+	err = srv.Serve(lis)
 	if err != nil {
 		logger.Fatalf("grpc serving error: %s", err.Error())
 	}

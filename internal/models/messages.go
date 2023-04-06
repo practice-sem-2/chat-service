@@ -3,8 +3,16 @@ package models
 import "time"
 
 type FileAttachment struct {
-	MimeType string `db:"mime_type"`
-	FileID   string `db:"mime_type"`
+	MimeType string `validate:"required" db:"mime_type"`
+	FileID   string `validate:"required,uuid" db:"file_id"`
+}
+
+type MessageSend struct {
+	MessageID   string           `validate:"required,uuid"`
+	ChatID      string           `validate:"required,uuid"`
+	Text        string           `validate:"max=2048,required_without=Attachments"`
+	ReplyTo     *string          `validate:"uuid"`
+	Attachments []FileAttachment `validate:"required_without=Text"`
 }
 
 type Message struct {

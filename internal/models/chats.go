@@ -1,7 +1,15 @@
 package models
 
 type Chat struct {
-	ChatID string `json:"chat_id" db:"chat_id"`
+	ChatID       string `json:"chat_id" db:"chat_id"`
+	MembersCount int    `json:"members_count" db:"members_count"`
+	IsDirect     bool   `json:"is_direct" db:"is_direct"`
+}
+
+type ChatCreate struct {
+	ChatID   string   `json:"chat_id" validate:"required,uuid" db:"chat_id"`
+	IsDirect bool     `json:"is_direct" validate:"required" db:"is_direct"`
+	Members  []string `json:"members" validate:"required,uuid"`
 }
 
 type ChatMember struct {

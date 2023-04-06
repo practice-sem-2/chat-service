@@ -36,10 +36,10 @@ func NewChatsStorage(db Scope) *ChatsStorage {
 	}
 }
 
-func (s *ChatsStorage) CreateChat(ctx context.Context, chatId string) error {
+func (s *ChatsStorage) CreateChat(ctx context.Context, chatId string, isDirect bool) error {
 	query, args, err := sq.Insert("chats").
-		Columns("chat_id").
-		Values(chatId).
+		Columns("chat_id", "is_direct").
+		Values(chatId, isDirect).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
 
@@ -112,9 +112,11 @@ func (s *ChatsStorage) DeleteChatMembers(ctx context.Context, chatId string, mem
 }
 
 func (s *ChatsStorage) GetChat(ctx context.Context, chatId string) (*models.Chat, error) {
-	query, args, err := sq.Select("*").
+	query, args, err := sq.Select("chats.*, count(user_id) as members_count").
 		From("chats").
+		Join("chat_members USING(chat_id)").
 		Where(sq.Eq{"chat_id": chatId}).
+		GroupBy("chats.chat_id").
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
 
@@ -163,7 +165,7 @@ func (s *ChatsStorage) GetChatWithMembers(ctx context.Context, chatId string) (*
 	members := make([]models.ChatMember, 0)
 	for rows.Next() {
 		member := models.ChatMember{}
-		if err = rows.Scan(&chat.ChatID, &member.UserID); err != nil {
+		if err = rows.Scan(&chat.ChatID, &chat.IsDirect, &member.UserID); err != nil {
 			return nil, err
 		}
 		members = append(members, member)
