@@ -4,12 +4,23 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/Shopify/sarama"
 	"github.com/jmoiron/sqlx"
 )
 
-type Registry struct {
-	db    *sqlx.DB
-	scope Scope
+type AtomicFunc func(Registry) error
+
+type Registry interface {
+	Atomic(ctx context.Context, fn AtomicFunc) error
+	GetChatsStore() *ChatsStorage
+	GetUpdatesStore() *UpdatesStorage
+}
+
+type DefaultRegistry struct {
+	db       *sqlx.DB
+	scope    Scope
+	producer sarama.SyncProducer
+	cfg      *UpdatesStoreConfig
 }
 
 type Scope interface {
@@ -26,14 +37,16 @@ type Scope interface {
 	NamedQuery(query string, arg interface{}) (*sqlx.Rows, error)
 }
 
-func NewRegistry(db *sqlx.DB) *Registry {
-	return &Registry{
-		db:    db,
-		scope: db,
+func NewRegistry(db *sqlx.DB, p sarama.SyncProducer, cfg *UpdatesStoreConfig) *DefaultRegistry {
+	return &DefaultRegistry{
+		db:       db,
+		scope:    db,
+		producer: p,
+		cfg:      cfg,
 	}
 }
 
-func (r *Registry) Atomic(ctx context.Context, fn func(store *Registry) error) (err error) {
+func (r *DefaultRegistry) Atomic(ctx context.Context, fn AtomicFunc) (err error) {
 	tx, err := r.db.BeginTxx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return err
@@ -53,11 +66,19 @@ func (r *Registry) Atomic(ctx context.Context, fn func(store *Registry) error) (
 		}
 	}()
 
-	storage := Registry{r.db, tx}
+	storage := DefaultRegistry{
+		db:       r.db,
+		scope:    tx,
+		producer: r.producer,
+	}
 	err = fn(&storage)
 	return err
 }
 
-func (r *Registry) GetChatsStore() *ChatsStorage {
+func (r *DefaultRegistry) GetChatsStore() *ChatsStorage {
 	return NewChatsStorage(r.scope)
+}
+
+func (r *DefaultRegistry) GetUpdatesStore() *UpdatesStorage {
+	return NewUpdatesStore(r.producer, r.cfg)
 }

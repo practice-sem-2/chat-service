@@ -4,10 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/Shopify/sarama"
 	"github.com/go-playground/validator/v10"
 	"github.com/jmoiron/sqlx"
 	"github.com/practice-sem-2/auth-tools"
-	"github.com/practice-sem-2/user-service/internal/pb"
+	"github.com/practice-sem-2/user-service/internal/pb/chats"
 	"github.com/practice-sem-2/user-service/internal/server"
 	storage "github.com/practice-sem-2/user-service/internal/storages"
 	usecase "github.com/practice-sem-2/user-service/internal/usecases"
@@ -17,7 +18,9 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 )
 
 func initLogger(level string) *logrus.Logger {
@@ -69,9 +72,32 @@ func initServer(address string, c *usecase.ChatsUsecase, a *auth.VerifierService
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterChatServer(grpcServer, server.NewChatServer(c, a, v))
+	chats.RegisterChatServer(grpcServer, server.NewChatServer(c, a, v))
 
 	return grpcServer, listener
+}
+
+func initProducer(logger *logrus.Logger) sarama.SyncProducer {
+	brokers := viper.GetString("KAFKA_BROKERS")
+	if len(brokers) == 0 {
+		logger.Fatal("KAFKA_BROKERS environment variable must be defined")
+	}
+
+	addrs := strings.Split(brokers, ",")
+	config := sarama.NewConfig()
+	config.Producer.Partitioner = sarama.NewHashPartitioner
+	config.Producer.RequiredAcks = sarama.WaitForLocal
+	config.Producer.Timeout = 10 * time.Second
+	config.Producer.Return.Successes = true
+	config.Consumer.Offsets.Initial = sarama.OffsetNewest
+	config.Consumer.Offsets.AutoCommit.Enable = false
+	producer, err := sarama.NewSyncProducer(addrs, config)
+
+	if err != nil {
+		logger.WithError(err).Fatalf("can't create producer")
+	}
+
+	return producer
 }
 
 func main() {
@@ -99,8 +125,13 @@ func main() {
 		}
 	}(db)
 
-	store := storage.NewRegistry(db)
-	chats := usecase.NewChatsUsecase(store)
+	producer := initProducer(logger)
+
+	store := storage.NewRegistry(db, producer, &storage.UpdatesStoreConfig{
+		UpdatesTopic: viper.GetString("UPDATES_TOPIC"),
+	})
+
+	chatsUsecase := usecase.NewChatsUsecase(store)
 	verifier, err := auth.NewVerifierFromFile(viper.GetString("JWT_PUBLIC_KEY_PATH"))
 
 	if err != nil {
@@ -109,7 +140,7 @@ func main() {
 
 	validate := validator.New()
 	address := fmt.Sprintf("%s:%d", host, port)
-	srv, lis := initServer(address, chats, verifier, validate, logger)
+	srv, lis := initServer(address, chatsUsecase, verifier, validate, logger)
 	osSignal := make(chan os.Signal, 1)
 	signal.Notify(osSignal,
 		syscall.SIGHUP,

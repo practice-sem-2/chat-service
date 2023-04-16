@@ -6,7 +6,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/practice-sem-2/auth-tools"
 	"github.com/practice-sem-2/user-service/internal/models"
-	"github.com/practice-sem-2/user-service/internal/pb"
+	"github.com/practice-sem-2/user-service/internal/pb/chats"
 	storage "github.com/practice-sem-2/user-service/internal/storages"
 	usecase "github.com/practice-sem-2/user-service/internal/usecases"
 	"google.golang.org/grpc/codes"
@@ -19,7 +19,7 @@ var (
 )
 
 type ChatServer struct {
-	pb.UnimplementedChatServer
+	chats.UnimplementedChatServer
 	chats    *usecase.ChatsUsecase
 	auth     *auth.VerifierService
 	validate *validator.Validate
@@ -33,7 +33,7 @@ func NewChatServer(c *usecase.ChatsUsecase, a *auth.VerifierService, v *validato
 	}
 }
 
-func (s *ChatServer) CreateChat(ctx context.Context, r *pb.CreateChatRequest) (*emptypb.Empty, error) {
+func (s *ChatServer) CreateChat(ctx context.Context, r *chats.CreateChatRequest) (*emptypb.Empty, error) {
 
 	claims, err := s.auth.GetUser(ctx)
 
@@ -60,22 +60,22 @@ func (s *ChatServer) CreateChat(ctx context.Context, r *pb.CreateChatRequest) (*
 	return NoReturn, nil
 }
 
-func (s *ChatServer) DeleteChat(ctx context.Context, r *pb.DeleteChatRequest) (*emptypb.Empty, error) {
+func (s *ChatServer) DeleteChat(ctx context.Context, r *chats.DeleteChatRequest) (*emptypb.Empty, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (s *ChatServer) AddChatMembers(ctx context.Context, r *pb.AddChatMembersRequest) (*emptypb.Empty, error) {
+func (s *ChatServer) AddChatMembers(ctx context.Context, r *chats.AddChatMembersRequest) (*emptypb.Empty, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (s *ChatServer) DeleteChatMembers(ctx context.Context, r *pb.DeleteChatMembersRequest) (*emptypb.Empty, error) {
+func (s *ChatServer) DeleteChatMembers(ctx context.Context, r *chats.DeleteChatMembersRequest) (*emptypb.Empty, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (s *ChatServer) SendMessage(ctx context.Context, r *pb.SendMessageRequest) (*emptypb.Empty, error) {
+func (s *ChatServer) SendMessage(ctx context.Context, r *chats.SendMessageRequest) (*emptypb.Empty, error) {
 	// TODO: Handle attachments
 
 	user, err := s.auth.GetUser(ctx)
@@ -105,12 +105,12 @@ func (s *ChatServer) SendMessage(ctx context.Context, r *pb.SendMessageRequest) 
 	return NoReturn, err
 }
 
-func (s *ChatServer) GetMessagesSince(ctx context.Context, r *pb.GetMessagesSinceRequest) (*pb.GetMessagesResponse, error) {
+func (s *ChatServer) GetMessagesSince(ctx context.Context, r *chats.GetMessagesSinceRequest) (*chats.GetMessagesResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (s *ChatServer) GetMessagesBefore(ctx context.Context, r *pb.GetMessagesBeforeRequest) (*pb.GetMessagesResponse, error) {
+func (s *ChatServer) GetMessagesBefore(ctx context.Context, r *chats.GetMessagesBeforeRequest) (*chats.GetMessagesResponse, error) {
 	//TODO implement me
 	panic("implement me")
 }

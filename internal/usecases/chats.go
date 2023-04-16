@@ -18,10 +18,10 @@ var (
 )
 
 type ChatsUsecase struct {
-	registry *storage.Registry
+	registry storage.Registry
 }
 
-func NewChatsUsecase(r *storage.Registry) *ChatsUsecase {
+func NewChatsUsecase(r storage.Registry) *ChatsUsecase {
 	return &ChatsUsecase{
 		registry: r,
 	}
@@ -48,20 +48,34 @@ func (u *ChatsUsecase) CreateChat(ctx context.Context, claims *auth.UserClaims, 
 		return fmt.Errorf("%w: direct chat must have exactly two members", ErrBusinessLogicViolation)
 	}
 
-	err = u.registry.Atomic(ctx, func(r *storage.Registry) error {
+	err = u.registry.Atomic(ctx, func(r storage.Registry) error {
 		store := r.GetChatsStore()
 		err := store.CreateChat(ctx, chat.ChatID, chat.IsDirect)
 		if err != nil {
 			return err
 		}
 		err = store.AddChatMembers(ctx, chat.ChatID, chat.Members)
+		if err != nil {
+			return err
+		}
+
+		upd := u.registry.GetUpdatesStore()
+		err = upd.ChatCreated(&models.ChatCreated{
+			UpdateMeta: models.UpdateMeta{
+				Audience: chat.Members,
+			},
+			ChatID:   chat.ChatID,
+			IsDirect: chat.IsDirect,
+			Members:  chat.Members,
+		})
 		return err
 	})
+
 	return
 }
 
 func (u *ChatsUsecase) GetChatWithMembers(ctx context.Context, claims *auth.UserClaims, chatId string) (c *models.ChatWithMembers, err error) {
-	err = u.registry.Atomic(ctx, func(r *storage.Registry) error {
+	err = u.registry.Atomic(ctx, func(r storage.Registry) error {
 		store := r.GetChatsStore()
 
 		isMember, err := store.UserIsMember(ctx, chatId, claims.Username)
@@ -85,7 +99,7 @@ func (u *ChatsUsecase) GetChatWithMembers(ctx context.Context, claims *auth.User
 func (u *ChatsUsecase) SendMessage(ctx context.Context, sender *auth.UserClaims, message models.MessageSend) error {
 	// TODO: Handle attachments
 
-	return u.registry.Atomic(ctx, func(r *storage.Registry) error {
+	return u.registry.Atomic(ctx, func(r storage.Registry) error {
 		store := r.GetChatsStore()
 
 		// Check if user is a chat member
@@ -110,14 +124,33 @@ func (u *ChatsUsecase) SendMessage(ctx context.Context, sender *auth.UserClaims,
 			}
 		}
 
+		now := time.Now().UTC()
 		err = store.PutMessage(ctx, &models.Message{
 			MessageID:   message.MessageID,
 			FromUser:    sender.Username,
 			ChatID:      message.ChatID,
-			SendingTime: time.Now().UTC(),
+			SendingTime: now,
 			Text:        message.Text,
 			ReplyTo:     message.ReplyTo,
 			Attachments: nil,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		upd := r.GetUpdatesStore()
+		err = upd.MessageSent(&models.MessageSent{
+			UpdateMeta: models.UpdateMeta{
+				Timestamp: now,
+				Audience:  nil,
+			},
+			MessageID:   message.MessageID,
+			FromUser:    sender.Username,
+			ChatID:      message.ChatID,
+			Text:        message.Text,
+			ReplyTo:     message.ReplyTo,
+			Attachments: message.Attachments,
 		})
 		return err
 	})

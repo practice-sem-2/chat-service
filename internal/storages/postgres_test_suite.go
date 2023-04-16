@@ -20,11 +20,6 @@ type PostgresTestSuite struct {
 func (s *PostgresTestSuite) SetupSuite() {
 	var err error
 	viper.AutomaticEnv()
-	viper.SetDefault("DB_DSN",
-		"postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")
-	viper.SetDefault("MIGRATIONS_DSN",
-		"pgx://postgres:postgres@localhost:5432/postgres?sslmode=disable")
-	viper.SetDefault("MIGRATIONS_DIR", "file://./migrations")
 	dbDsn := viper.GetString("DB_DSN")
 	migrationsDsn := viper.GetString("MIGRATIONS_DSN")
 	migrationsDir := viper.GetString("MIGRATIONS_DIR")

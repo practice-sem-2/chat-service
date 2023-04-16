@@ -95,7 +95,7 @@ func (s *ChatsStorageTestSuite) Test_AddMember_Atomic() {
 
 	registry := NewRegistry(s.db)
 
-	err := registry.Atomic(ctx, func(registry *Registry) error {
+	err := registry.Atomic(ctx, func(registry *DefaultRegistry) error {
 		store := registry.GetChatsStore()
 		err := store.CreateChat(ctx, chatId, false)
 		assert.NoError(s.T(), err, "should correctly create chat")
