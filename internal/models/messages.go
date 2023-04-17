@@ -11,7 +11,7 @@ type MessageSend struct {
 	MessageID   string           `validate:"required,uuid"`
 	ChatID      string           `validate:"required,uuid"`
 	Text        string           `validate:"max=2048,required_without=Attachments"`
-	ReplyTo     *string          `validate:"uuid"`
+	ReplyTo     *string          `validate:"omitempty,uuid"`
 	Attachments []FileAttachment `validate:"required_without=Text"`
 }
 
