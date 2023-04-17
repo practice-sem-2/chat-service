@@ -140,10 +140,19 @@ func (u *ChatsUsecase) SendMessage(ctx context.Context, sender *auth.UserClaims,
 		}
 
 		upd := r.GetUpdatesStore()
+
+		chat, err := store.GetChatWithMembers(ctx, message.ChatID)
+		if err != nil {
+			return fmt.Errorf("can't get chat members: %v", err)
+		}
+		audience := make([]string, len(chat.Members))
+		for i, mem := range chat.Members {
+			audience[i] = mem.UserID
+		}
 		err = upd.MessageSent(&models.MessageSent{
 			UpdateMeta: models.UpdateMeta{
 				Timestamp: now,
-				Audience:  nil,
+				Audience:  audience,
 			},
 			MessageID:   message.MessageID,
 			FromUser:    sender.Username,
