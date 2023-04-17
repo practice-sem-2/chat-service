@@ -29,14 +29,12 @@ func (s *UpdatesStorage) putUpdate(topic, key string, event *updates.Update) err
 	if err != nil {
 		return err
 	}
-
 	_, _, err = s.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     topic,
 		Key:       sarama.StringEncoder(key),
 		Value:     sarama.ByteEncoder(bytes),
 		Timestamp: time.Time{},
 	})
-
 	return err
 }
 
@@ -57,16 +55,17 @@ func (s *UpdatesStorage) chatCreatedToProtobuf(chat *models.ChatCreated) *update
 }
 
 func (s *UpdatesStorage) messageSentToProtobuf(msg *models.MessageSent) *updates.Update {
-	l := 0
+	var attachments []*updates.FileAttachment
 	if msg.Attachments != nil {
-		l = len(msg.Attachments)
-	}
-	attachments := make([]*updates.FileAttachment, l)
-	for i, att := range msg.Attachments {
-		attachments[i] = &updates.FileAttachment{
-			MimeType: att.MimeType,
-			FileId:   att.FileID,
+		attachments = make([]*updates.FileAttachment, len(msg.Attachments))
+		for i, att := range msg.Attachments {
+			attachments[i] = &updates.FileAttachment{
+				MimeType: att.MimeType,
+				FileId:   att.FileID,
+			}
 		}
+	} else {
+		attachments = make([]*updates.FileAttachment, 0, 0)
 	}
 	return &updates.Update{
 		Meta: &updates.UpdateMeta{
