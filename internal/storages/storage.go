@@ -70,6 +70,7 @@ func (r *DefaultRegistry) Atomic(ctx context.Context, fn AtomicFunc) (err error)
 		db:       r.db,
 		scope:    tx,
 		producer: r.producer,
+		cfg:      r.cfg,
 	}
 	err = fn(&storage)
 	return err
