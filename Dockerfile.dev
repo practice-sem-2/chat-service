@@ -4,7 +4,10 @@ WORKDIR /app
 
 COPY . .
 
-RUN apk add git && go mod download -x
-RUN go install github.com/cosmtrek/air@latest
+RUN apk add git gcc && go mod download -x
+RUN go install github.com/cosmtrek/air@latest \
+    && go install github.com/go-delve/delve/cmd/dlv@latest
+
+EXPOSE 40000
 
 CMD air
