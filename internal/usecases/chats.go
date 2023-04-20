@@ -97,6 +97,80 @@ func (u *ChatsUsecase) GetChatWithMembers(ctx context.Context, claims *auth.User
 	return
 }
 
+func (u *ChatsUsecase) AddChatMembers(ctx context.Context, claims *auth.UserClaims, chatId string, users []string) error {
+	err := u.registry.Atomic(ctx, func(r storage.Registry) error {
+		store := r.GetChatsStore()
+		isMember, err := store.UserIsMember(ctx, chatId, claims.Username)
+		if err != nil {
+			return err
+		}
+
+		if !isMember {
+			return ErrUserIsNotAChatMember
+		}
+
+		audience, err := u.getChatAudience(ctx, chatId, store)
+		if err != nil {
+			return err
+		}
+
+		for _, username := range audience {
+			err = r.GetUpdatesStore().MemberAdded(&models.MemberAdded{
+				UpdateMeta: models.UpdateMeta{
+					Timestamp: time.Time{},
+					Audience:  audience,
+				},
+				ChatID:   chatId,
+				Username: username,
+			})
+
+			if err != nil {
+				return err
+			}
+		}
+
+		return store.AddChatMembers(ctx, chatId, users)
+	})
+	return err
+}
+
+func (u *ChatsUsecase) DeleteChatMembers(ctx context.Context, claims *auth.UserClaims, chatId string, users []string) error {
+	err := u.registry.Atomic(ctx, func(r storage.Registry) error {
+		store := r.GetChatsStore()
+		isMember, err := store.UserIsMember(ctx, chatId, claims.Username)
+		if err != nil {
+			return err
+		}
+
+		if !isMember {
+			return ErrUserIsNotAChatMember
+		}
+
+		audience, err := u.getChatAudience(ctx, chatId, store)
+		if err != nil {
+			return err
+		}
+
+		for _, username := range audience {
+			err = r.GetUpdatesStore().MemberAdded(&models.MemberAdded{
+				UpdateMeta: models.UpdateMeta{
+					Timestamp: time.Time{},
+					Audience:  audience,
+				},
+				ChatID:   chatId,
+				Username: username,
+			})
+
+			if err != nil {
+				return err
+			}
+		}
+
+		return store.DeleteChatMembers(ctx, chatId, users)
+	})
+	return err
+}
+
 func (u *ChatsUsecase) SendMessage(ctx context.Context, sender *auth.UserClaims, message models.MessageSend) error {
 	// TODO: Handle attachments
 
@@ -142,14 +216,11 @@ func (u *ChatsUsecase) SendMessage(ctx context.Context, sender *auth.UserClaims,
 
 		upd := r.GetUpdatesStore()
 
-		chat, err := store.GetChatWithMembers(ctx, message.ChatID)
+		audience, err := u.getChatAudience(ctx, message.ChatID, store)
 		if err != nil {
-			return fmt.Errorf("can't get chat members: %v", err)
+			return err
 		}
-		audience := make([]string, len(chat.Members))
-		for i, mem := range chat.Members {
-			audience[i] = mem.UserID
-		}
+
 		err = upd.MessageSent(&models.MessageSent{
 			UpdateMeta: models.UpdateMeta{
 				Timestamp: now,
@@ -164,6 +235,18 @@ func (u *ChatsUsecase) SendMessage(ctx context.Context, sender *auth.UserClaims,
 		})
 		return err
 	})
+}
+
+func (u *ChatsUsecase) getChatAudience(ctx context.Context, chatId string, store *storage.ChatsStorage) ([]string, error) {
+	chat, err := store.GetChatWithMembers(ctx, chatId)
+	if err != nil {
+		return nil, fmt.Errorf("can't get chat members: %v", err)
+	}
+	audience := make([]string, len(chat.Members))
+	for i, mem := range chat.Members {
+		audience[i] = mem.UserID
+	}
+	return audience, nil
 }
 
 func (u *ChatsUsecase) GetMessages(ctx context.Context, user *auth.UserClaims, sel *models.MessagesSelect) ([]models.Message, error) {

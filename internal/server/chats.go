@@ -145,19 +145,57 @@ func (s *ChatServer) CreateChat(ctx context.Context, r *chats.CreateChatRequest)
 	return NoReturn, nil
 }
 
+func (s *ChatServer) GetChat(ctx context.Context, r *chats.GetChatRequest) (*chats.GetChatResponse, error) {
+	claims, err := s.auth.GetUser(ctx)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	chat, err := s.chats.GetChatWithMembers(ctx, claims, r.ChatId)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	res := &chats.GetChatResponse{
+		ChatId:       chat.ChatID,
+		MembersCount: int32(chat.MembersCount),
+		Members:      make([]string, len(chat.Members)),
+	}
+
+	for i, member := range chat.Members {
+		res.Members[i] = member.UserID
+	}
+
+	return res, nil
+}
+
 func (s *ChatServer) DeleteChat(ctx context.Context, r *chats.DeleteChatRequest) (*emptypb.Empty, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (s *ChatServer) AddChatMembers(ctx context.Context, r *chats.AddChatMembersRequest) (*emptypb.Empty, error) {
-	//TODO implement me
-	panic("implement me")
+	claims, err := s.auth.GetUser(ctx)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	err = s.chats.AddChatMembers(ctx, claims, r.ChatId, r.Members)
+	return NoReturn, wrapError(err)
 }
 
 func (s *ChatServer) DeleteChatMembers(ctx context.Context, r *chats.DeleteChatMembersRequest) (*emptypb.Empty, error) {
-	//TODO implement me
-	panic("implement me")
+	claims, err := s.auth.GetUser(ctx)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	err = s.chats.DeleteChatMembers(ctx, claims, r.ChatId, r.Members)
+	return NoReturn, wrapError(err)
 }
 
 func (s *ChatServer) SendMessage(ctx context.Context, r *chats.SendMessageRequest) (*emptypb.Empty, error) {
@@ -191,6 +229,11 @@ func (s *ChatServer) SendMessage(ctx context.Context, r *chats.SendMessageReques
 }
 
 func wrapError(err error) error {
+
+	if err == nil {
+		return nil
+	}
+
 	errorMapper := []struct {
 		from error
 		to   error
@@ -203,10 +246,6 @@ func wrapError(err error) error {
 			from: storage.ErrChatNotFound,
 			to:   status.Error(codes.NotFound, err.Error()),
 		},
-	}
-
-	if err == nil {
-		return nil
 	}
 
 	if validationErr, ok := err.(validator.ValidationErrors); ok {

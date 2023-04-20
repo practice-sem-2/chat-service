@@ -16,6 +16,7 @@ var (
 	ErrRepliedMessageNotFound = errors.New("message replies to a not existing message")
 	ErrMessageAlreadyExists   = errors.New("message with provided message_id already exists")
 	ErrMessageNotFound        = errors.New("message does not exist")
+	ErrNotMember              = errors.New("user is not a member")
 )
 
 const (
@@ -106,6 +107,9 @@ func (s *ChatsStorage) DeleteChatMembers(ctx context.Context, chatId string, mem
 
 	if GetPgxConstraintName(err) == "chat_members_chat_id_fkey" {
 		return ErrChatNotFound
+
+	} else if GetPgxConstraintName(err) == "49cdc045-7c03-4d0e-bdc7-abcc0faa4c8b" {
+		return ErrNotMember
 	} else {
 		return err
 	}
