@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Masterminds/squirrel"
 	"github.com/practice-sem-2/auth-tools"
 	"github.com/practice-sem-2/user-service/internal/models"
 	storage "github.com/practice-sem-2/user-service/internal/storages"
@@ -163,4 +164,46 @@ func (u *ChatsUsecase) SendMessage(ctx context.Context, sender *auth.UserClaims,
 		})
 		return err
 	})
+}
+
+func (u *ChatsUsecase) GetMessages(ctx context.Context, user *auth.UserClaims, sel *models.MessagesSelect) ([]models.Message, error) {
+	query := squirrel.And{squirrel.Eq{"chat_id": sel.ChatID}}
+	if sel.Since != nil {
+		query = append(query, squirrel.GtOrEq{"sending_time": *sel.Since})
+	}
+	if sel.Until != nil {
+		query = append(query, squirrel.LtOrEq{"sending_time": *sel.Until})
+	}
+	opt := storage.SelectOptions{
+		Limit:   500,
+		OrderBy: []string{"sending_time ASC"},
+	}
+	if sel.Count != nil {
+		opt.Limit = uint64(*sel.Count)
+	}
+
+	var messages []models.Message
+	err := u.registry.Atomic(ctx, func(r storage.Registry) error {
+		var err error
+
+		store := r.GetChatsStore()
+
+		isMember, err := store.UserIsMember(ctx, sel.ChatID, user.Username)
+		if err != nil {
+			return err
+		}
+
+		if !isMember {
+			return ErrUserIsNotAChatMember
+		}
+
+		messages, err = store.SelectMessages(ctx, query, opt)
+		return err
+	})
+
+	return messages, err
+}
+
+func (u *ChatsUsecase) GetUsersChats(ctx context.Context, user *auth.UserClaims) ([]models.RichChat, error) {
+	return u.registry.GetChatsStore().GetUserChats(ctx, user.Username)
 }

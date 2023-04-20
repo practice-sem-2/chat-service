@@ -24,3 +24,10 @@ type Message struct {
 	ReplyTo     *string   `db:"reply_to"`
 	Attachments []FileAttachment
 }
+
+type MessagesSelect struct {
+	ChatID string     `validate:"required,uuid"`
+	Count  *int       `validate:"omitempty,min=0,max=512"`
+	Since  *time.Time `validate:"omitempty"`
+	Until  *time.Time `validate:"omitempty"`
+}

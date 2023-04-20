@@ -20,3 +20,9 @@ type ChatWithMembers struct {
 	Chat
 	Members []ChatMember `json:"members"`
 }
+
+type RichChat struct {
+	ChatID      string   `json:"chat_id" db:"chat_id"`
+	IsDirect    bool     `json:"is_direct" db:"is_direct"`
+	LastMessage *Message `json:"last_message"`
+}

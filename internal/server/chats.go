@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"time"
 )
 
 var (
@@ -31,6 +32,90 @@ func NewChatServer(c *usecase.ChatsUsecase, a *auth.VerifierService, v *validato
 		auth:     a,
 		validate: v,
 	}
+}
+
+func (s *ChatServer) GetUserChats(ctx context.Context, r *chats.GetChatsRequest) (*chats.GetChatsResponse, error) {
+	claims, err := s.auth.GetUser(ctx)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	userChats, err := s.chats.GetUsersChats(ctx, claims)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	res := &chats.GetChatsResponse{
+		Chats: make([]*chats.RichChat, len(userChats)),
+	}
+	// TODO: handle attachments
+	for i, chat := range userChats {
+		res.Chats[i] = &chats.RichChat{
+			ChatId:   chat.ChatID,
+			IsDirect: chat.IsDirect,
+			LastMessage: &chats.Message{
+				MessageId:   chat.LastMessage.MessageID,
+				FromUser:    chat.LastMessage.FromUser,
+				ChatId:      chat.LastMessage.ChatID,
+				Timestamp:   chat.LastMessage.SendingTime.UTC().Unix(),
+				Text:        chat.LastMessage.Text,
+				ReplyTo:     chat.LastMessage.ReplyTo,
+				Attachments: nil,
+			},
+		}
+	}
+	return res, nil
+}
+
+func (s *ChatServer) GetMessages(ctx context.Context, r *chats.GetMessagesRequest) (*chats.GetMessagesResponse, error) {
+	claims, err := s.auth.GetUser(ctx)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	sel := &models.MessagesSelect{ChatID: r.ChatId}
+
+	if r.Since != nil {
+		sel.Since = new(time.Time)
+		*sel.Since = time.Unix(*r.Since, 0).UTC()
+	}
+
+	if r.Until != nil {
+		sel.Until = new(time.Time)
+		*sel.Until = time.Unix(*r.Until, 0).UTC()
+	}
+
+	if r.Count != nil {
+		count := new(int)
+		*count = int(*r.Count)
+		sel.Count = count
+	}
+
+	messages, err := s.chats.GetMessages(ctx, claims, sel)
+
+	if err != nil {
+		return nil, wrapError(err)
+	}
+
+	res := &chats.GetMessagesResponse{
+		Messages: make([]*chats.Message, len(messages)),
+	}
+
+	for i, msg := range messages {
+		res.Messages[i] = &chats.Message{
+			MessageId:   msg.MessageID,
+			FromUser:    msg.FromUser,
+			ChatId:      msg.ChatID,
+			Timestamp:   msg.SendingTime.Unix(),
+			Text:        msg.Text,
+			ReplyTo:     msg.ReplyTo,
+			Attachments: nil,
+		}
+	}
+	return res, nil
 }
 
 func (s *ChatServer) CreateChat(ctx context.Context, r *chats.CreateChatRequest) (*emptypb.Empty, error) {
@@ -103,16 +188,6 @@ func (s *ChatServer) SendMessage(ctx context.Context, r *chats.SendMessageReques
 		return nil, wrapError(err)
 	}
 	return NoReturn, err
-}
-
-func (s *ChatServer) GetMessagesSince(ctx context.Context, r *chats.GetMessagesSinceRequest) (*chats.GetMessagesResponse, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *ChatServer) GetMessagesBefore(ctx context.Context, r *chats.GetMessagesBeforeRequest) (*chats.GetMessagesResponse, error) {
-	//TODO implement me
-	panic("implement me")
 }
 
 func wrapError(err error) error {

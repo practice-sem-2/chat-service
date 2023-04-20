@@ -346,3 +346,42 @@ func (s *ChatsStorage) DeleteMessage(ctx context.Context, messageId string) erro
 
 	return nil
 }
+
+func (s *ChatsStorage) GetUserChats(ctx context.Context, userId string) ([]models.RichChat, error) {
+
+	query, args, err := sq.
+		Select("c.chat_id", "is_direct", "message_id", "from_user", "reply_to", "sending_time", "text").
+		From("chats c").
+		Join("messages msg ON c.chat_id = msg.chat_id").
+		Join("chat_members mem ON c.chat_id = mem.chat_id ").
+		Where(sq.Eq{
+			"user_id": userId,
+		}).
+		Where("msg.sending_time = (SELECT max(sending_time) FROM messages WHERE c.chat_id = chat_id)").
+		PlaceholderFormat(sq.Dollar).
+		ToSql()
+
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.db.QueryxContext(ctx, query, args...)
+
+	chats := make([]models.RichChat, 0)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return chats, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		chat := models.RichChat{}
+		msg := models.Message{}
+		chat.LastMessage = &msg
+		err = rows.Scan(&chat.ChatID, &chat.IsDirect, &msg.MessageID, &msg.FromUser, &msg.ReplyTo, &msg.SendingTime, &msg.Text)
+		msg.ChatID = chat.ChatID
+		chats = append(chats, chat)
+	}
+	return chats, nil
+}
